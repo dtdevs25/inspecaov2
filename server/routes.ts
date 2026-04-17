@@ -308,12 +308,15 @@ router.post('/auth/login', loginLimiter, async (req: any, res: any) => {
 
         // Fetch Company Names if assigned directly to user
         let companyNames: string[] = [];
+        if (user.company) companyNames.push(user.company.trim());
+
         if (user.companies && user.companies.length > 0) {
             const assignedCompanies = await prisma.company.findMany({
                 where: { id: { in: user.companies } },
                 select: { name: true }
             });
-            companyNames = [...new Set(assignedCompanies.map(c => c.name.trim()))];
+            const dbNames = assignedCompanies.map(c => c.name.trim());
+            companyNames = [...new Set([...companyNames, ...dbNames])];
         }
 
         const tokenData = { 
