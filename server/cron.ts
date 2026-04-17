@@ -125,8 +125,8 @@ export const startCronJobs = () => {
                         }
                     });
 
-                    // Prepara E-mails da filial
-                    const recipientsSet = new Set<string>();
+                    // Prepara Destinatários da filial (Map para evitar duplicidade e manter nomes)
+                    const recipients = new Map<string, string | null>();
                     
                     const eligibleUsers = await prisma.user.findMany({
                         where: { 
@@ -140,12 +140,16 @@ export const startCronJobs = () => {
                         }
                     });
                     
-                    eligibleUsers.forEach(u => u.email && recipientsSet.add(u.email));
-                    unit.reportEmails?.forEach(email => recipientsSet.add(email.trim()));
+                    eligibleUsers.forEach(u => {
+                        if (u.email) recipients.set(u.email.toLowerCase().trim(), u.displayName || u.name);
+                    });
+                    unit.reportEmails?.forEach(email => {
+                        const e = email.toLowerCase().trim();
+                        if (e && !recipients.has(e)) recipients.set(e, null);
+                    });
 
-                    const allEmails = Array.from(recipientsSet);
-                    
-                    if (allEmails.length > 0) {
+                    for (const [emailAddr, recipientName] of recipients.entries()) {
+                        const greeting = recipientName ? `Olá ${recipientName},` : `Olá,`;
                         const emailHtml = `
                             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px 20px; text-align: center;">
                                 <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
@@ -154,7 +158,7 @@ export const startCronJobs = () => {
                                         <p style="color: #555555; margin: 5px 0 0 0; font-size: 16px; font-weight: 500;">Relatório Semanal</p>
                                     </div>
                                     <div style="padding: 40px 30px; text-align: left;">
-                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">Olá,</p>
+                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${greeting}</p>
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
                                             Segue em anexo o relatório de inspeções referente à <strong>Semana ${week}/${year}</strong> (${weekRange.full}).
                                         </p>
@@ -177,14 +181,12 @@ export const startCronJobs = () => {
                             </div>
                         `;
 
-                        const emailSent = await sendEmail(allEmails.join(','), `Relatório Semanal de Segurança - ${company.name} (${unit.name}) [Semana ${week}/${year}]`, `Relatório anexo.`, emailHtml, [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]);
+                        const emailSent = await sendEmail(emailAddr, `Relatório Semanal de Segurança - ${company.name} (${unit.name}) [Semana ${week}/${year}]`, `Relatório anexo.`, emailHtml, [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]);
                         if (emailSent) {
-                            for (const emailAddr of allEmails) {
-                                await logAction('EMAIL_SENT', 'weekly_reports', `Relatório Semanal automático (Filial) enviado para: ${emailAddr}`);
-                            }
+                            await logAction('EMAIL_SENT', 'weekly_reports', `Relatório Semanal automático (Filial) enviado para: ${emailAddr}`);
                         }
-                        console.log(`[CRON] Enviado filial ${unit.name} para: ${allEmails.join(', ')}`);
                     }
+                    console.log(`[CRON] Processado filial ${unit.name} para ${recipients.size} destinatário(s) individualmente.`);
                 } catch (e: any) {
                      if (e.message && e.message.includes('Não existem dados suficientes')) {
                          console.log(`[CRON] Ignorando filial ${unit.name}: Não há dados.`);
@@ -229,15 +231,21 @@ export const startCronJobs = () => {
                         data: { name: reportName, company: company.name, unit: 'Geral', companyId: company.id, unitId: null, week, year, range: weekRange.full, pdfUrl, createdAt: new Date() }
                     });
 
-                    const recipientsSet = new Set<string>();
+                    const recipients = new Map<string, string | null>();
                     const eligibleUsers = await prisma.user.findMany({ 
                         where: { companies: { has: company.id }, role: { in: ['Administrador', 'Gestor'] }, blocked: false, status: 'Aprovado' } 
                     });
-                    eligibleUsers.forEach(u => u.email && recipientsSet.add(u.email));
-                    company.reportEmails?.forEach(email => recipientsSet.add(email.trim()));
+                    
+                    eligibleUsers.forEach(u => {
+                        if (u.email) recipients.set(u.email.toLowerCase().trim(), u.displayName || u.name);
+                    });
+                    company.reportEmails?.forEach(email => {
+                        const e = email.toLowerCase().trim();
+                        if (e && !recipients.has(e)) recipients.set(e, null);
+                    });
 
-                    const allEmails = Array.from(recipientsSet);
-                    if (allEmails.length > 0) {
+                    for (const [emailAddr, recipientName] of recipients.entries()) {
+                        const greeting = recipientName ? `Olá ${recipientName},` : `Olá,`;
                         const emailHtml = `
                             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px 20px; text-align: center;">
                                 <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
@@ -246,12 +254,12 @@ export const startCronJobs = () => {
                                         <p style="color: #555555; margin: 5px 0 0 0; font-size: 16px; font-weight: 500;">Relatório Semanal</p>
                                     </div>
                                     <div style="padding: 40px 30px; text-align: left;">
-                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">Olá,</p>
+                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${greeting}</p>
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
                                             Segue em anexo o relatório de inspeções referente à <strong>Semana ${week}/${year}</strong> (${weekRange.full}).
                                         </p>
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                            Este documento foi gerado e enviado automaticamente via sistema pela <strong>${company.name}</strong>. Solicitamos que verifiquem os apontamentos referentes aos setores e locais pelos quais são responsáveis, auxiliando-nos na correção ou eliminação dos itens pontuados.
+                                            Este documento foi gerado e enviado automaticamente via sistema pela <strong>${company.name} (Geral)</strong>. Solicitamos que verifiquem os apontamentos referentes aos setores e locais pelos quais são responsáveis, auxiliando-nos na correção ou eliminação dos itens pontuados.
                                         </p>
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
                                             Sua colaboração é fundamental para a melhoria contínua da nossa segurança.
@@ -269,13 +277,12 @@ export const startCronJobs = () => {
                             </div>
                         `;
 
-                        const emailSent = await sendEmail(allEmails.join(','), `Relatório Semanal de Segurança - ${company.name} [Semana ${week}/${year}]`, `Relatório anexo.`, emailHtml, [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]);
+                        const emailSent = await sendEmail(emailAddr, `Relatório Semanal de Segurança - ${company.name} [Semana ${week}/${year}]`, `Relatório anexo.`, emailHtml, [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]);
                         if (emailSent) {
-                            for (const emailAddr of allEmails) {
-                                await logAction('EMAIL_SENT', 'weekly_reports', `Relatório Semanal automático (Geral) enviado para: ${emailAddr}`);
-                            }
+                            await logAction('EMAIL_SENT', 'weekly_reports', `Relatório Semanal automático (Geral) enviado para: ${emailAddr}`);
                         }
                     }
+                    console.log(`[CRON] Processado empresa ${company.name} para ${recipients.size} destinatário(s) individualmente.`);
                 } catch (e: any) {
                      if (!e.message?.includes('Não existem dados')) console.error(`[CRON] Erro geral empresa ${company.name}:`, e);
                 }
