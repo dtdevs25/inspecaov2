@@ -1492,21 +1492,41 @@ router.post('/reports/legacy/action-plan/:id', authenticate, async (req: any, re
             const userUnits: string[] = req.user.units || [];
             const userSectors: string[] = req.user.sectors || [];
             const userLocations: string[] = req.user.locations || [];
-            const mySectorNames: string[] = req.user.sectorNames || [];
-            const myUnitNames: string[] = req.user.unitNames || [];
+            let mySectorNames: string[] = req.user.sectorNames || [];
+            let myUnitNames: string[] = req.user.unitNames || [];
+            let myCompanyNames: string[] = req.user.companyNames || [];
+
+            // SELF-HEALING: If token is missing company names or categories, fetch from DB
+            if (myCompanyNames.length === 0 || (req.user.role === 'Gestor' && mySectorNames.length === 0)) {
+                const freshUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+                if (freshUser) {
+                    if (freshUser.company) myCompanyNames.push(freshUser.company.trim());
+                    if (freshUser.companies.length > 0) {
+                        const comps = await prisma.company.findMany({ where: { id: { in: freshUser.companies } }, select: { name: true } });
+                        myCompanyNames = [...new Set([...myCompanyNames, ...comps.map(c => c.name.trim())])];
+                    }
+                    // For Gestor legacy fallback
+                    if (freshUser.role === 'Gestor' && freshUser.sectors.length > 0) {
+                        const assignedSectors = await prisma.sector.findMany({ where: { id: { in: freshUser.sectors } }, select: { name: true, unitName: true } });
+                        mySectorNames = [...new Set(assignedSectors.map(s => s.name.trim()))];
+                        myUnitNames = [...new Set(assignedSectors.map(s => s.unitName.trim()))];
+                    }
+                }
+            }
 
             let allowed = false;
 
             if (req.user.role === 'Administrador') {
-                const userCompanies: string[] = req.user.companies || [];
-                const myCompanyNames: string[] = req.user.companyNames || [];
-                
                 const matchId = plan.companyId ? userCompanies.includes(plan.companyId) : false;
                 const matchName = plan.company ? myCompanyNames.some(cn => cn.toLowerCase() === plan.company?.toLowerCase()) : false;
                 
                 allowed = matchId || matchName;
                 
-                if (!allowed) console.log(`[Audit Permission] Administrador negado. PlanID: ${id}, PlanCompID: ${plan.companyId}, PlanCompName: ${plan.company}, UserCompanies: ${userCompanies}, UserCompanyNames: ${myCompanyNames}`);
+                if (!allowed) {
+                    console.log(`[Audit Permission] Administrador negado. PlanID: ${id}`);
+                    console.log(`  - Empresa no Plano: ID=${plan.companyId}, Nome="${plan.company}"`);
+                    console.log(`  - Empresa no Perfil Usuário: IDs=[${userCompanies}], Nomes=[${myCompanyNames}]`);
+                }
             } else if (req.user.role === 'Gestor') {
                 // Direct UUID matches
                 const matchSectorId = plan.sectorId ? userSectors.includes(plan.sectorId) : false;
@@ -1555,15 +1575,25 @@ router.post('/reports/email-action-plan/:id', authenticate, async (req: any, res
             const userUnits: string[] = req.user.units || [];
             const userSectors: string[] = req.user.sectors || [];
             const userLocations: string[] = req.user.locations || [];
-            const mySectorNames: string[] = req.user.sectorNames || [];
-            const myUnitNames: string[] = req.user.unitNames || [];
+            let mySectorNames: string[] = req.user.sectorNames || [];
+            let myUnitNames: string[] = req.user.unitNames || [];
+            let myCompanyNames: string[] = req.user.companyNames || [];
+
+            // SELF-HEALING: If token is missing data, fetch from DB
+            if (myCompanyNames.length === 0 || (req.user.role === 'Gestor' && mySectorNames.length === 0)) {
+                const freshUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+                if (freshUser) {
+                    if (freshUser.company) myCompanyNames.push(freshUser.company.trim());
+                    if (freshUser.companies.length > 0) {
+                        const comps = await prisma.company.findMany({ where: { id: { in: freshUser.companies } }, select: { name: true } });
+                        myCompanyNames = [...new Set([...myCompanyNames, ...comps.map(c => c.name.trim())])];
+                    }
+                }
+            }
 
             let allowed = false;
 
             if (req.user.role === 'Administrador') {
-                const userCompanies: string[] = req.user.companies || [];
-                const myCompanyNames: string[] = req.user.companyNames || [];
-                
                 const matchId = plan.companyId ? userCompanies.includes(plan.companyId) : false;
                 const matchName = plan.company ? myCompanyNames.some(cn => cn.toLowerCase() === plan.company?.toLowerCase()) : false;
                 
