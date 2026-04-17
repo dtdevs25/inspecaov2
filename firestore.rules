@@ -1,0 +1,139 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (auth.uid)
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (optional)
+    //   - email: string (required)
+    //   - photoURL: string (optional)
+    //   - role: string (enum: Master, Administrador, Gestor, Usuário Comum)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: inspections
+    // Document ID: inspectionId
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - company: string (optional)
+    //   - status: string (enum: open, completed, overdue)
+    //   - date: timestamp (required)
+    //   - inspectorId: string (required)
+    //   - sector: string (optional)
+    //   - type: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: reports
+    // Document ID: reportId
+    // Fields:
+    //   - company: string (required)
+    //   - sector: string (required)
+    //   - location: string (required)
+    //   - description: string (required)
+    //   - status: string (enum: Pendente, Aprovado, Rejeitado)
+    //   - reporterName: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: weekly_reports
+    // Document ID: reportId
+    // Fields:
+    //   - name: string (required)
+    //   - company: string (required)
+    //   - week: number (required)
+    //   - year: number (required)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(roles) {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role in roles) ||
+        (request.auth.token.email == "Dani.dk.santos@gmail.com")
+      );
+    }
+
+    function isAdmin() {
+      return hasRole(['Master', 'Administrador']);
+    }
+
+    function isManager() {
+      return hasRole(['Master', 'Administrador', 'Gestor']);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidUser(data) {
+      return data.uid is string &&
+             data.email is string &&
+             (!('role' in data) || data.role in ['Master', 'Administrador', 'Gestor', 'Usuário Comum']);
+    }
+
+    function isValidInspection(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.status in ['open', 'completed', 'overdue'] &&
+             data.inspectorId is string;
+    }
+
+    function isValidReport(data) {
+      return data.company is string && data.company.size() > 0 &&
+             data.sector is string && data.sector.size() > 0 &&
+             data.location is string && data.location.size() > 0 &&
+             data.description is string && data.description.size() > 0 &&
+             (!('status' in data) || data.status in ['Pendente', 'Aprovado', 'Rejeitado']);
+    }
+
+    function isValidWeeklyReport(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.company is string && data.company.size() > 0 &&
+             data.week is number && data.year is number;
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /inspections/{inspectionId} {
+      allow read: if isAuthenticated();
+      allow create: if isManager() && isValidInspection(request.resource.data);
+      allow update: if isManager() && isValidInspection(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isManager();
+      allow create: if true; // Public reports can be created by anyone
+      allow update: if isManager() && isValidReport(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /weekly_reports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isManager() && isValidWeeklyReport(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}
