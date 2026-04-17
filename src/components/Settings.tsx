@@ -452,20 +452,19 @@ export default function Settings() {
                     <th className="py-4 px-6 text-left text-xs font-bold text-[#27AE60] uppercase tracking-wider border-r border-gray-100">Data/Hora</th>
                     <th className="py-4 px-6 text-left text-xs font-bold text-[#27AE60] uppercase tracking-wider border-r border-gray-100">Usuário</th>
                     <th className="py-4 px-6 text-left text-xs font-bold text-[#27AE60] uppercase tracking-wider border-r border-gray-100">Ação</th>
-                    <th className="py-4 px-6 text-left text-xs font-bold text-[#27AE60] uppercase tracking-wider border-r border-gray-100">Recurso</th>
                     <th className="py-4 px-6 text-left text-xs font-bold text-[#27AE60] uppercase tracking-wider">Detalhes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center">
+                      <td colSpan={4} className="py-12 text-center">
                         <Loader2 className="h-8 w-8 text-[#27AE60] animate-spin mx-auto" />
                       </td>
                     </tr>
                   ) : filteredLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-gray-400 font-medium">
+                      <td colSpan={4} className="py-12 text-center text-gray-400 font-medium">
                         Nenhum log encontrado.
                       </td>
                     </tr>
@@ -498,8 +497,7 @@ export default function Settings() {
                             {log.action}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-sm font-medium text-gray-600 border-r border-gray-50">{log.resource}</td>
-                        <td className="py-4 px-6 text-sm text-gray-500 max-w-xs truncate">{log.details}</td>
+                        <td className="py-4 px-6 text-sm text-gray-500 max-w-xs">{log.details}</td>
                       </tr>
                     ))
                   )}
