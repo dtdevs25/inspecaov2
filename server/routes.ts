@@ -306,6 +306,16 @@ router.post('/auth/login', loginLimiter, async (req: any, res: any) => {
             unitNames = [...new Set([...unitNames, ...assignedUnits.map(u => u.name.trim())])];
         }
 
+        // Fetch Company Names if assigned directly to user
+        let companyNames: string[] = [];
+        if (user.companies && user.companies.length > 0) {
+            const assignedCompanies = await prisma.company.findMany({
+                where: { id: { in: user.companies } },
+                select: { name: true }
+            });
+            companyNames = [...new Set(assignedCompanies.map(c => c.name.trim()))];
+        }
+
         const tokenData = { 
             id: user.id, 
             email: user.email, 
@@ -316,8 +326,9 @@ router.post('/auth/login', loginLimiter, async (req: any, res: any) => {
             units: user.units || [],
             sectors: (user as any).sectors || [],
             locations: (user as any).locations || [],
+            companyNames, // Include for legacy data filtering
             sectorNames, // Include for legacy data filtering
-            unitNames // Include for legacy data filtering (unit scoping)
+            unitNames // Include for legacy data filtering
         };
         const token = jwt.sign(tokenData, JWT_SECRET, { expiresIn: '7d' });
         
@@ -1484,7 +1495,15 @@ router.post('/reports/legacy/action-plan/:id', authenticate, async (req: any, re
             let allowed = false;
 
             if (req.user.role === 'Administrador') {
-                allowed = plan.companyId ? userCompanies.includes(plan.companyId) : false;
+                const userCompanies: string[] = req.user.companies || [];
+                const myCompanyNames: string[] = req.user.companyNames || [];
+                
+                const matchId = plan.companyId ? userCompanies.includes(plan.companyId) : false;
+                const matchName = plan.company ? myCompanyNames.some(cn => cn.toLowerCase() === plan.company?.toLowerCase()) : false;
+                
+                allowed = matchId || matchName;
+                
+                if (!allowed) console.log(`[Audit Permission] Administrador negado. PlanID: ${id}, PlanCompID: ${plan.companyId}, PlanCompName: ${plan.company}, UserCompanies: ${userCompanies}, UserCompanyNames: ${myCompanyNames}`);
             } else if (req.user.role === 'Gestor') {
                 // Direct UUID matches
                 const matchSectorId = plan.sectorId ? userSectors.includes(plan.sectorId) : false;
@@ -1539,7 +1558,13 @@ router.post('/reports/email-action-plan/:id', authenticate, async (req: any, res
             let allowed = false;
 
             if (req.user.role === 'Administrador') {
-                allowed = plan.companyId ? userCompanies.includes(plan.companyId) : false;
+                const userCompanies: string[] = req.user.companies || [];
+                const myCompanyNames: string[] = req.user.companyNames || [];
+                
+                const matchId = plan.companyId ? userCompanies.includes(plan.companyId) : false;
+                const matchName = plan.company ? myCompanyNames.some(cn => cn.toLowerCase() === plan.company?.toLowerCase()) : false;
+                
+                allowed = matchId || matchName;
             } else if (req.user.role === 'Gestor') {
                 const matchSectorId = plan.sectorId ? userSectors.includes(plan.sectorId) : false;
                 const matchLocationId = plan.locationId ? userLocations.includes(plan.locationId) : false;
