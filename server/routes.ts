@@ -57,19 +57,25 @@ const getFriendlyLabel = async (collection: string, id: string, record?: any): P
     // For numbered entities, compute sequential number
     if (['inspections', 'action_plans', 'reports', 'weekly_reports', 'projects'].includes(collection)) {
         try {
-            const model = (prisma as any)[{
+            const modelKey = ({
                 'inspections': 'inspection',
                 'action_plans': 'actionPlan',
                 'reports': 'report',
                 'weekly_reports': 'weeklyReport',
                 'projects': 'project',
-            }[collection]];
-            const total = await model.count();
+            } as any)[collection];
+
+            if (!modelKey) return `${label}: ${id.substring(0, 8)}...`;
+            
+            const model = (prisma as any)[modelKey];
+            if (!model) return `${label}: ${id.substring(0, 8)}...`;
+
             const position = await model.count({ where: { createdAt: { lte: record?.createdAt || new Date() } } });
             const seqNum = String(position).padStart(5, '0');
             const extra = record?.description ? ` - ${String(record.description).substring(0, 40)}` : '';
             return `${label} #${seqNum}${extra}`;
-        } catch {
+        } catch (err) {
+            console.error('Erro ao gerar label amigável:', err);
             return `${label}: ${id.substring(0, 8)}...`;
         }
     }
@@ -409,7 +415,7 @@ router.post('/auth/register', async (req: any, res: any) => {
         
         const emailSent = await sendEmail(adminEmail, 'Nova Solicitação de Acesso - InspecPro', 'Novo acesso solicitado por ' + email, adminHtml);
         if (emailSent) {
-            await logAction(null, 'EMAIL_SENT', 'auth', `Notificação de novo cadastro enviada para administrador: ${adminEmail}`);
+            await logAction(null, 'EMAIL_SENT', 'auth', `Notificação de nova solicitação de acesso (${email}) enviada para admin.`);
         }
         
         // Return 201 without logging them in immediately (no JWT token), since they must wait for approval.
@@ -781,118 +787,6 @@ router.post('/data/:collection', authenticate, async (req: any, res: any) => {
 
         const friendlyLabel = await getFriendlyLabel(collection, created.id, created);
         await logAction(req.user, 'CREATE', collection, `Criou ${friendlyLabel}`);
-
-        // Specialized automation for Action Plans: notify responsible Gestors
-        if (collection === 'action_plans' && created.inspectionId) {
-            try {
-                // Background task to send emails so we don't delay the response
-                (async () => {
-                    const planId = created.id;
-                    const inspectionId = created.inspectionId;
-                    const plan = created;
-                    
-                    // 1. Fetch authorized users (Gestors)
-                    const whereConditions: any[] = [];
-                    if (plan.companyId) whereConditions.push({ companies: { has: plan.companyId } });
-                    if (plan.unitId)    whereConditions.push({ units: { has: plan.unitId } });
-                    if (plan.sectorId)  whereConditions.push({ sectors: { has: plan.sectorId } });
-                    if (plan.locationId) whereConditions.push({ locations: { has: plan.locationId } });
-
-                    const orConditions: any[] = [{ role: 'Master' }];
-                    let targetAdminCompanyId = created.companyId;
-                    if (!targetAdminCompanyId && created.company) {
-                        const matchedComp = await prisma.company.findFirst({ where: { name: created.company } });
-                        if (matchedComp) targetAdminCompanyId = matchedComp.id;
-                    }
-                    if (targetAdminCompanyId) {
-                        orConditions.push({ role: 'Administrador', companies: { has: targetAdminCompanyId } });
-                    }
-
-                    const gestorAnd: any = { role: 'Gestor' };
-                    let hasGestorCondition = false;
-                    if (plan.sectorId) { gestorAnd.sectors = { has: plan.sectorId }; hasGestorCondition = true; }
-                    if (plan.locationId) { gestorAnd.locations = { has: plan.locationId }; hasGestorCondition = true; }
-                    
-                    if (hasGestorCondition) {
-                        orConditions.push(gestorAnd);
-                    }
-
-                    const responsibleUsers = await prisma.user.findMany({
-                        where: {
-                            blocked: false,
-                            status: 'Aprovado',
-                            OR: orConditions
-                        }
-                    });
-
-                    const emails = responsibleUsers.filter(u => u.email).map(u => u.email as string);
-                    
-                    if (emails.length > 0) {
-                        // 2. Generate Action Plan PDF (photo before/after layout)
-                        const pdfBuffer = await LegacyReportService.generateActionPlanPDF(planId);
-                        const fileName = `plano_acao_${plan.company?.replace(/[^a-zA-Z0-9]/g, '') || 'inspecpro'}_${planId}.pdf`;
-
-                        // Send individually to personalize greeting
-                        for (const manager of responsibleUsers.filter(u => u.email)) {
-                            const firstName = manager.displayName ? manager.displayName.split(' ')[0] : 'Gestor';
-                            const unitNameStr = plan.unit ? ` (${plan.unit})` : '';
-
-                            const isGestor = manager.role === 'Gestor';
-                            const bodyIntro = isGestor
-                                ? `Parabéns a você e à sua equipe! 🎉 Uma inspeção pendente no setor <strong>${plan.sector || 'seu setor'}</strong> foi devidamente tratada e o Plano de Ação foi criado com sucesso para registro e acompanhamento.`
-                                : `Para seu conhecimento, a inspeção pendente no setor <strong>${plan.sector || '---'}</strong> foi tratada e a equipe responsável concluiu a criação do Plano de Ação correspondente.`;
-
-                            const emailHtml = `
-                                <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px 20px; text-align: center;">
-                                    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                                        <div style="background-color: #ffffff; border-bottom: 3px solid #27AE60; padding: 30px 20px;">
-                                            <img src="${process.env.FRONTEND_URL || 'https://inspecao.ehspro.com.br'}/logos/logocompleto.png" alt="InspecPRO" style="height: 48px; object-fit: contain; margin-bottom: 5px;" onerror="this.outerHTML='<h1 style=\\'color: #27AE60; margin: 0; font-size: 28px; letter-spacing: 1px;\\'>InspecPRO</h1>'" />
-                                            <p style="color: #555555; margin: 5px 0 0 0; font-size: 16px; font-weight: 500;">✅ Inspeção Fechada — Plano de Ação Criado</p>
-                                        </div>
-                                        <div style="padding: 40px 30px; text-align: left;">
-                                            <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">Olá <strong>${firstName}</strong>,</p>
-                                            <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                                ${bodyIntro}
-                                            </p>
-                                            <div style="padding: 15px; background-color: #f0faf5; border-left: 4px solid #27AE60; border-radius: 4px; margin-bottom: 20px;">
-                                                <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0;"><strong>Ação Corretiva (Resolução):</strong></p>
-                                                <p style="color: #555555; font-size: 14px; line-height: 1.6; margin: 8px 0 0 0;">${plan.actionDescription || 'Consultar relatório PDF em anexo.'}</p>
-                                                <p style="color: #27AE60; font-size: 12px; margin-top: 10px; font-weight: bold;">Local: ${plan.local || 'Geral'} | Setor: ${plan.sector || 'Não especificado'}</p>
-                                            </div>
-                                            <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                                O documento oficial do Plano de Ação, contendo as fotografias do <strong>antes e depois</strong> do apontamento, está em anexo para seu registro.
-                                            </p>
-                                            <div style="text-align: center; margin: 30px 0;">
-                                                <a href="${process.env.FRONTEND_URL || 'https://inspecao.ehspro.com.br'}" style="display: inline-block; padding: 14px 28px; background-color: #27AE60; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; border: none; cursor: pointer;">
-                                                    Acessar Sistema InspecPRO
-                                                </a>
-                                            </div>
-                                            <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                                Atenciosamente,<br/><strong>Equipe InspecPRO</strong>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-
-                            const emailSent = await sendEmail(
-                                manager.email as string,
-                                `✅ Plano de Ação Criado — ${plan.sector || 'Seu Setor'} (${plan.company || ''})`,
-                                `Um apontamento do seu setor foi fechado e um Plano de Ação foi criado.`,
-                                emailHtml,
-                                [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]
-                            );
-
-                            if (emailSent) {
-                                await logAction(req.user, 'EMAIL_SENT', 'action_plans', `Confirmação de Plano de Ação enviada para: ${manager.email}`);
-                            }
-                        }
-                    }
-                })().catch(err => console.error("Erro na automação de e-mail de Plano de Ação:", err));
-            } catch (automationErr) {
-                console.error("Erro ao iniciar automação de e-mail:", automationErr);
-            }
-        }
 
         res.status(201).json(created);
     } catch (e: any) {
@@ -1745,13 +1639,17 @@ router.post('/reports/email-action-plan/:id', authenticate, async (req: any, res
                 </div>
             `;
 
-            await sendEmail(
+            const emailSent = await sendEmail(
                 admin.email as string,
                 `✅ Plano de Ação Criado — ${plan.sector || 'Seu Setor'} (${plan.company || ''})`,
-                `Um apontamento do setor foi fechado e um Plano de Ação foi criado.`,
+                `Um apontamento do seu setor foi fechado e um Plano de Ação foi criado.`,
                 emailHtml,
                 [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]
             );
+
+            if (emailSent) {
+                await logAction(req.user, 'EMAIL_SENT', 'action_plans', `Plano de Ação enviado para: ${admin.email}`);
+            }
         }
 
         res.json({ success: true, count: emails.length });
