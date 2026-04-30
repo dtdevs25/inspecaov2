@@ -214,13 +214,16 @@ export const startCronJobs = () => {
                             </div>
                         `;
 
-                        // Somente anexa se o arquivo for menor que 15MB para evitar erros de SMTP (552 message too big)
-                        const attachments = pdfBuffer.length < 15 * 1024 * 1024 
+                        const pdfSizeMb = pdfBuffer.length / (1024 * 1024);
+                        console.log(`[CRON] [Filial: ${unit.name}] Tamanho do relatório: ${pdfSizeMb.toFixed(2)}MB`);
+
+                        // Somente anexa se o arquivo for menor que 5MB (limite de segurança rigoroso para SMTP)
+                        const attachments = pdfBuffer.length < 5 * 1024 * 1024 
                             ? [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]
                             : [];
                         
                         if (attachments.length === 0) {
-                            console.log(`[CRON] [Filial: ${unit.name}] Relatório muito grande (${(pdfBuffer.length / 1024 / 1024).toFixed(2)}MB). Enviando apenas link.`);
+                            console.log(`[CRON] [Filial: ${unit.name}] Relatório muito grande. Enviando apenas link de download.`);
                         }
 
                         const emailSent = await sendEmail(emailAddr, `Relatório Semanal de Segurança - ${company.name} (${unit.name}) [Semana ${week}/${year}]`, `Relatório disponível em: ${fullPdfUrl}`, emailHtml, attachments);
@@ -333,10 +336,17 @@ export const startCronJobs = () => {
                             </div>
                         `;
 
-                        // Somente anexa se o arquivo for menor que 15MB para evitar erros de SMTP
-                        const attachments = pdfBuffer.length < 15 * 1024 * 1024 
+                        const pdfSizeMb = pdfBuffer.length / (1024 * 1024);
+                        console.log(`[CRON] [Matriz: ${company.name}] Tamanho do relatório: ${pdfSizeMb.toFixed(2)}MB`);
+
+                        // Somente anexa se o arquivo for menor que 5MB para evitar erros de SMTP
+                        const attachments = pdfBuffer.length < 5 * 1024 * 1024 
                             ? [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]
                             : [];
+                        
+                        if (attachments.length === 0) {
+                            console.log(`[CRON] [Matriz: ${company.name}] Relatório muito grande. Enviando apenas link de download.`);
+                        }
 
                         const emailSent = await sendEmail(emailAddr, `Relatório Semanal de Segurança - ${company.name} [Semana ${week}/${year}]`, `Relatório disponível em: ${fullPdfUrl}`, emailHtml, attachments);
                         if (emailSent) {
