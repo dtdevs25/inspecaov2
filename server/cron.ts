@@ -160,10 +160,7 @@ export const startCronJobs = () => {
                     
                     const eligibleUsers = await prisma.user.findMany({
                         where: { 
-                            OR: [
-                                { companies: { has: company.id } },
-                                { units: { has: unit.id } }
-                            ],
+                            units: { has: unit.id },
                             role: { in: ['Administrador', 'Gestor'] }, 
                             blocked: false, 
                             status: 'Aprovado' 
