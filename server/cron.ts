@@ -298,27 +298,6 @@ export const startCronJobs = () => {
                     console.log(`[CRON] [Matriz: ${company.name}] Enviando para ${recipients.size} destinatário(s): ${Array.from(recipients.keys()).join(', ')}`);
                     for (const [emailAddr, recipientName] of recipients.entries()) {
                         const greeting = recipientName ? `Olá ${recipientName},` : `Olá,`;
-                        const emailHtml = `
-                            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px 20px; text-align: center;">
-                                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                                    <div style="background-color: #ffffff; border-bottom: 3px solid #27AE60; padding: 30px 20px;">
-                                        <img src="${process.env.FRONTEND_URL || 'https://inspecao.ehspro.com.br'}/logos/logocompleto.png" alt="InspecPRO" style="height: 48px; object-fit: contain; margin-bottom: 5px;" onerror="this.outerHTML='<h1 style=\\'color: #27AE60; margin: 0; font-size: 28px; letter-spacing: 1px;\\'>InspecPRO</h1>'" />
-                                        <p style="color: #555555; margin: 5px 0 0 0; font-size: 16px; font-weight: 500;">Relatório Semanal</p>
-                                    </div>
-                                    <div style="padding: 40px 30px; text-align: left;">
-                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${greeting}</p>
-                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                            Segue em anexo o relatório de inspeções referente à <strong>Semana ${week}/${year}</strong> (${weekRange.full}).
-                                        </p>
-                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                            Este documento foi gerado e enviado automaticamente via sistema pela <strong>${company.name} (Geral)</strong>. Solicitamos que verifiquem os apontamentos referentes aos setores e locais pelos quais são responsáveis, auxiliando-nos na correção ou eliminação dos itens pontuados.
-                                        </p>
-                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-                                            Sua colaboração é fundamental para a melhoria contínua da nossa segurança.
-                                        </p>
-                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                            Atenciosamente,<br/><strong>Equipe de Segurança do Trabalho</strong>
-                                        </p>
                         const fullPdfUrl = `${process.env.FRONTEND_URL || 'https://inspecao.ehspro.com.br'}${pdfUrl}`;
                         const emailHtml = `
                             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px 20px; text-align: center;">
