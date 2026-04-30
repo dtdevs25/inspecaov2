@@ -91,6 +91,7 @@ export const startCronJobs = () => {
                 where: { reportScheduleDay: currentDay, reportScheduleTime: currentTimeStr }
             });
 
+<<<<<<< HEAD
             if (companiesToTrigger.length === 0 && unitsToTrigger.length === 0) {
                 // Log opcional para debug (descomente se precisar ver o cron rodando todo minuto)
                 // console.log(`[CRON] Verificando... ${currentTimeStr} (Dia ${currentDay}). Nada para disparar.`);
@@ -100,6 +101,8 @@ export const startCronJobs = () => {
             console.log(`[CRON] >>> GATILHO DETECTADO às ${currentTimeStr} (Dia da semana: ${currentDay})`);
             console.log(`[CRON] Matrizes encontradas: ${companiesToTrigger.length}`);
             console.log(`[CRON] Filiais encontradas: ${unitsToTrigger.length}`);
+            
+            if (companiesToTrigger.length === 0 && unitsToTrigger.length === 0) return;
 
             const week = getCurrentWeek(dateInBrt);
             const year = dateInBrt.getFullYear();
@@ -168,7 +171,6 @@ export const startCronJobs = () => {
                     });
                     
                     console.log(`[CRON] [Filial: ${unit.name}] Usuários elegíveis encontrados: ${eligibleUsers.length}`);
-
                     eligibleUsers.forEach(u => {
                         if (u.email) recipients.set(u.email.toLowerCase().trim(), u.displayName || u.name);
                     });
@@ -183,9 +185,9 @@ export const startCronJobs = () => {
                     }
 
                     console.log(`[CRON] [Filial: ${unit.name}] Enviando para ${recipients.size} destinatário(s): ${Array.from(recipients.keys()).join(', ')}`);
-
                     for (const [emailAddr, recipientName] of recipients.entries()) {
                         const greeting = recipientName ? `Olá ${recipientName},` : `Olá,`;
+                        const fullPdfUrl = `${process.env.FRONTEND_URL || 'https://inspecao.ehspro.com.br'}${pdfUrl}`;
                         const emailHtml = `
                             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px 20px; text-align: center;">
                                 <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
@@ -196,10 +198,13 @@ export const startCronJobs = () => {
                                     <div style="padding: 40px 30px; text-align: left;">
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${greeting}</p>
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                            Segue em anexo o relatório de inspeções referente à <strong>Semana ${week}/${year}</strong> (${weekRange.full}).
+                                            Segue o relatório de inspeções referente à <strong>Semana ${week}/${year}</strong> (${weekRange.full}).
                                         </p>
+                                        <div style="text-align: center; margin: 30px 0;">
+                                            <a href="${fullPdfUrl}" style="background-color: #27AE60; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 10px rgba(39,174,96,0.2);">Visualizar Relatório Completo (PDF)</a>
+                                        </div>
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                                            Este documento foi gerado e enviado automaticamente via sistema pela <strong>${company.name} (${unit.name})</strong>. Solicitamos que verifiquem os apontamentos referentes aos setores e locais pelos quais são responsáveis, auxiliando-nos na correção ou eliminação dos itens pontuados.
+                                            Este documento foi gerado automaticamente via sistema pela <strong>${company.name} (${unit.name})</strong>. Solicitamos que verifiquem os apontamentos referentes aos setores e locais pelos quais são responsáveis, auxiliando-nos na correção ou eliminação dos itens pontuados.
                                         </p>
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
                                             Sua colaboração é fundamental para a melhoria contínua da nossa segurança.
@@ -217,7 +222,16 @@ export const startCronJobs = () => {
                             </div>
                         `;
 
-                        const emailSent = await sendEmail(emailAddr, `Relatório Semanal de Segurança - ${company.name} (${unit.name}) [Semana ${week}/${year}]`, `Relatório anexo.`, emailHtml, [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]);
+                        // Somente anexa se o arquivo for menor que 15MB para evitar erros de SMTP (552 message too big)
+                        const attachments = pdfBuffer.length < 15 * 1024 * 1024 
+                            ? [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]
+                            : [];
+                        
+                        if (attachments.length === 0) {
+                            console.log(`[CRON] [Filial: ${unit.name}] Relatório muito grande (${(pdfBuffer.length / 1024 / 1024).toFixed(2)}MB). Enviando apenas link.`);
+                        }
+
+                        const emailSent = await sendEmail(emailAddr, `Relatório Semanal de Segurança - ${company.name} (${unit.name}) [Semana ${week}/${year}]`, `Relatório disponível em: ${fullPdfUrl}`, emailHtml, attachments);
                         if (emailSent) {
                             console.log(`[CRON] [Filial: ${unit.name}] E-mail enviado com sucesso para ${emailAddr}`);
                             await logAction('EMAIL_SENT', 'weekly_reports', `Relatório Semanal automático (Filial) enviado para: ${emailAddr}`);
@@ -276,7 +290,6 @@ export const startCronJobs = () => {
                     });
                     
                     console.log(`[CRON] [Matriz: ${company.name}] Usuários elegíveis encontrados: ${eligibleUsers.length}`);
-
                     eligibleUsers.forEach(u => {
                         if (u.email) recipients.set(u.email.toLowerCase().trim(), u.displayName || u.name);
                     });
@@ -291,7 +304,6 @@ export const startCronJobs = () => {
                     }
 
                     console.log(`[CRON] [Matriz: ${company.name}] Enviando para ${recipients.size} destinatário(s): ${Array.from(recipients.keys()).join(', ')}`);
-
                     for (const [emailAddr, recipientName] of recipients.entries()) {
                         const greeting = recipientName ? `Olá ${recipientName},` : `Olá,`;
                         const emailHtml = `
@@ -315,6 +327,31 @@ export const startCronJobs = () => {
                                         <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
                                             Atenciosamente,<br/><strong>Equipe de Segurança do Trabalho</strong>
                                         </p>
+                        const fullPdfUrl = `${process.env.FRONTEND_URL || 'https://inspecao.ehspro.com.br'}${pdfUrl}`;
+                        const emailHtml = `
+                            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px 20px; text-align: center;">
+                                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                                    <div style="background-color: #ffffff; border-bottom: 3px solid #27AE60; padding: 30px 20px;">
+                                        <img src="${process.env.FRONTEND_URL || 'https://inspecao.ehspro.com.br'}/logos/logocompleto.png" alt="InspecPRO" style="height: 48px; object-fit: contain; margin-bottom: 5px;" onerror="this.outerHTML='<h1 style=\\'color: #27AE60; margin: 0; font-size: 28px; letter-spacing: 1px;\\'>InspecPRO</h1>'" />
+                                        <p style="color: #555555; margin: 5px 0 0 0; font-size: 16px; font-weight: 500;">Relatório Semanal</p>
+                                    </div>
+                                    <div style="padding: 40px 30px; text-align: left;">
+                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${greeting}</p>
+                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                                            Segue o relatório de inspeções referente à <strong>Semana ${week}/${year}</strong> (${weekRange.full}).
+                                        </p>
+                                        <div style="text-align: center; margin: 30px 0;">
+                                            <a href="${fullPdfUrl}" style="background-color: #27AE60; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 10px rgba(39,174,96,0.2);">Visualizar Relatório Completo (PDF)</a>
+                                        </div>
+                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                                            Este documento foi gerado automaticamente via sistema pela <strong>${company.name}</strong>. Solicitamos que verifiquem os apontamentos referentes aos setores e locais pelos quais são responsáveis, auxiliando-nos na correção ou eliminação dos itens pontuados.
+                                        </p>
+                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
+                                            Sua colaboração é fundamental para a melhoria contínua da nossa segurança.
+                                        </p>
+                                        <p style="color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                                            Atenciosamente,<br/><strong>Equipe de Segurança do Trabalho</strong>
+                                        </p>
                                         <div style="margin-top: 40px; border-top: 1px solid #eeeeee; padding-top: 20px; text-align: center;">
                                            <p style="color: #999999; font-size: 12px; margin: 0;">
                                               ⚠️ Este é um e-mail automático enviado pelo sistema InspecPRO.<br>Por favor, não responda esta mensagem.
@@ -325,7 +362,12 @@ export const startCronJobs = () => {
                             </div>
                         `;
 
-                        const emailSent = await sendEmail(emailAddr, `Relatório Semanal de Segurança - ${company.name} [Semana ${week}/${year}]`, `Relatório anexo.`, emailHtml, [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]);
+                        // Somente anexa se o arquivo for menor que 15MB para evitar erros de SMTP
+                        const attachments = pdfBuffer.length < 15 * 1024 * 1024 
+                            ? [{ filename: fileName, content: pdfBuffer, contentType: 'application/pdf' }]
+                            : [];
+
+                        const emailSent = await sendEmail(emailAddr, `Relatório Semanal de Segurança - ${company.name} [Semana ${week}/${year}]`, `Relatório disponível em: ${fullPdfUrl}`, emailHtml, attachments);
                         if (emailSent) {
                             console.log(`[CRON] [Matriz: ${company.name}] E-mail enviado com sucesso para ${emailAddr}`);
                             await logAction('EMAIL_SENT', 'weekly_reports', `Relatório Semanal automático (Geral) enviado para: ${emailAddr}`);
@@ -333,7 +375,7 @@ export const startCronJobs = () => {
                             console.error(`[CRON] [Matriz: ${company.name}] FALHA ao enviar e-mail para ${emailAddr}`);
                         }
                     }
-                    console.log(`[CRON] [Matriz: ${company.name}] Processamento concluído.`);
+                    console.log(`[CRON] Processado empresa ${company.name} para ${recipients.size} destinatário(s) individualmente.`);
                 } catch (e: any) {
                      if (!e.message?.includes('Não existem dados')) console.error(`[CRON] Erro geral empresa ${company.name}:`, e);
                 }
