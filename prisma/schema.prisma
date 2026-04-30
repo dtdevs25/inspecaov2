@@ -1,0 +1,221 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String       @id @default(uuid())
+  uid         String       @unique // Firebase UID or generated
+  displayName String?
+  email       String       @unique
+  photoURL    String?
+  role        String       @default("Usuário Comum")
+  password    String?      // Added for local auth
+  company       String?      // Added for new registration
+  companies     String[]     // Company IDs user has access to
+  units         String[]     // Unit IDs user has access to
+  sectors       String[]     // Sector IDs user has access to
+  locations     String[]     // Location IDs user has access to
+  blocked       Boolean      @default(false)
+  blockedReason String?
+  status        String       @default("Pendente") // Approval status (Pendente, Aprovado, Negado)
+  createdAt     DateTime     @default(now())
+}
+
+model Company {
+  id                   String   @id @default(uuid())
+  name                 String
+  cnpj                 String?
+  logo                 String?
+  reportEmails         String[]
+  reportScheduleTime   String?  // "HH:MM" no horário de Brasília (BRT/UTC-3)
+  reportScheduleDay    Int      @default(5) // 0=Domingo, 1=Segunda... 5=Sexta
+  createdAt            DateTime @default(now())
+}
+
+model Unit {
+  id                 String   @id @default(uuid())
+  companyId          String
+  companyName        String
+  name               String
+  address            String?
+  allowedUsers       String[]
+  reportEmails       String[]
+  reportScheduleTime String?
+  reportScheduleDay  Int      @default(5)
+  createdAt          DateTime @default(now())
+}
+
+model Sector {
+  id          String   @id @default(uuid())
+  companyId   String
+  unitId      String
+  unitName    String
+  companyName String
+  name        String
+  createdAt   DateTime @default(now())
+}
+
+model Location {
+  id          String   @id @default(uuid())
+  companyId   String
+  unitId      String
+  sectorId    String
+  sectorName  String
+  unitName    String
+  companyName String
+  name        String
+  createdAt   DateTime @default(now())
+}
+
+model Inspection {
+  id              String   @id @default(uuid())
+  companyId       String?
+  companyName     String?
+  unitId          String?
+  unitName        String?
+  sectorId        String?
+  sectorName      String?
+  locationId      String?
+  locationName    String?
+  date            String?
+  description     String?
+  type            String?
+  risk            String?
+  resolution      String?
+  responsible     String?
+  deadline        String?
+  observations    String?
+  status          String   @default("Pendente")
+  registeredBy    String?
+  registeredByUid String?
+  image           String?
+  hasActionPlan   Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Report {
+  id              String   @id @default(uuid())
+  company         String?
+  sector          String?
+  location        String?
+  description     String?
+  status          String   @default("Pendente")
+  photoUrl        String?
+  photo           String?
+  reporterName    String?
+  reporterContact String?
+  approvedAt      DateTime?
+  createdAt       DateTime @default(now())
+}
+
+model WeeklyReport {
+  id        String   @id @default(uuid())
+  name      String
+  company   String
+  companyId String?
+  unit      String?
+  unitId    String?
+  week      Int
+  year      Int
+  range     String?
+  findings  Json?
+  pdfUrl    String?
+  createdAt DateTime @default(now())
+}
+
+model TypeOfEntry {
+  id        String   @id @default(uuid())
+  name      String
+  type      String?
+  severity  String?
+  color     String?
+  category  String?
+  updatedAt DateTime? @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model ActionPlan {
+  id                    String   @id @default(uuid())
+  companyId             String?
+  unitId                String?
+  sectorId              String?
+  locationId            String?
+  company               String?
+  unit                  String?
+  sector                String?
+  local                 String?
+  description           String? 
+  actionDescription     String?
+  date                  String? 
+  actionDate            String?
+  status                String   @default("Pendente")
+  inspectionId          String?
+  inspectionSequential  String?
+  inspectionDate        String?
+  inspectionSector      String?
+  inspectionLocal       String?
+  inspectionDescription String?
+  registeredBy          String?
+  registeredByUid       String?
+  responsible           String?
+  photoBefore           String?
+  photoAfter            String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  companyId   String?
+  companyName String?
+  unitId      String?
+  unitName    String?
+  name        String?
+  description String?
+  sourceId    String?
+  sourceName  String?
+  typeId      String?
+  typeName    String?
+  status      String   @default("Em Andamento")
+  startDate   String?
+  endDate     String?
+  budget      String?
+  responsible String?
+  observations String?
+  image       String?
+  source      String?
+  progress    Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model ReportTemplate {
+  id          String   @id @default(uuid())
+  companyId   String
+  companyName String
+  type        String   // 'MainCover' | 'SectorCover' | 'Findings' | 'ActionPlan'
+  name        String?
+  minioUrl    String?
+  content     Json     // To store elements, positions, styles, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  userName  String?
+  userEmail String?
+  action    String?
+  resource  String?
+  details   String?
+  createdAt DateTime @default(now())
+}

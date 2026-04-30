@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["Master", "Administrador", "Gestor", "Usuário Comum"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Inspection": {
+      "title": "Inspection",
+      "description": "Inspection record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "company": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "completed", "overdue"] },
+        "date": { "type": "string", "format": "date-time" },
+        "inspectorId": { "type": "string" },
+        "sector": { "type": "string" },
+        "type": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "status", "inspectorId"]
+    },
+    "Report": {
+      "title": "Public Risk Report",
+      "description": "Risk report submitted by public users",
+      "type": "object",
+      "properties": {
+        "company": { "type": "string" },
+        "sector": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pendente", "Aprovado", "Rejeitado"] },
+        "photoUrl": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "reporterContact": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["company", "sector", "location", "description"]
+    },
+    "WeeklyReport": {
+      "title": "Weekly Report",
+      "description": "Generated weekly report metadata",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "company": { "type": "string" },
+        "week": { "type": "number" },
+        "year": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "company", "week", "year"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/inspections/{inspectionId}": {
+      "schema": "Inspection",
+      "description": "Inspection documents"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Public risk reports"
+    },
+    "/weekly_reports/{reportId}": {
+      "schema": "WeeklyReport",
+      "description": "Weekly report documents"
+    }
+  }
+}
