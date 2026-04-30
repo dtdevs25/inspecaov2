@@ -91,18 +91,13 @@ export const startCronJobs = () => {
                 where: { reportScheduleDay: currentDay, reportScheduleTime: currentTimeStr }
             });
 
-<<<<<<< HEAD
             if (companiesToTrigger.length === 0 && unitsToTrigger.length === 0) {
-                // Log opcional para debug (descomente se precisar ver o cron rodando todo minuto)
-                // console.log(`[CRON] Verificando... ${currentTimeStr} (Dia ${currentDay}). Nada para disparar.`);
                 return;
             }
 
             console.log(`[CRON] >>> GATILHO DETECTADO às ${currentTimeStr} (Dia da semana: ${currentDay})`);
             console.log(`[CRON] Matrizes encontradas: ${companiesToTrigger.length}`);
             console.log(`[CRON] Filiais encontradas: ${unitsToTrigger.length}`);
-            
-            if (companiesToTrigger.length === 0 && unitsToTrigger.length === 0) return;
 
             const week = getCurrentWeek(dateInBrt);
             const year = dateInBrt.getFullYear();
